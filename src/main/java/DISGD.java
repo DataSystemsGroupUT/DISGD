@@ -8,6 +8,8 @@ import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.tuple.Tuple;
 import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.api.java.tuple.Tuple4;
+import org.apache.flink.api.java.tuple.Tuple5;
+import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.streaming.api.TimeCharacteristic;
@@ -15,8 +17,6 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
-import org.apache.flink.streaming.api.functions.windowing.ProcessWindowFunction;
-import org.apache.flink.streaming.api.windowing.windows.GlobalWindow;
 import org.apache.flink.util.Collector;
 import org.apache.flink.util.OutputTag;
 
@@ -27,54 +27,66 @@ import java.util.Map;
 public class DISGD {
     public static void main(String[] args) throws Exception {
 
-        //Integer nodesWhereUserAppearance = 2;
+
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
-        //env.setParallelism(4);
-        DataStream<Tuple3<String, String, Float>> inputStream = env.addSource(new SourceWithTimestamp("/Users/heidyhazem/Desktop/ITBSGDN/nff.txt"));
+
+        final ParameterTool params = ParameterTool.fromArgs(args);
+        Integer ni = Integer.valueOf(params.get("ni"));
+        Integer nc = (int) Math.pow(ni,2);
+        env.setParallelism(nc);
+
+        DataStream<Tuple3<String, String, Float>> inputStream = null;
+
+
+        if(params.has("input") && params.has("records")){
+         inputStream = env.addSource(new SourceWithTimestamp(params.get("input"),params.getInt("records")));
+        }
+        else if(params.has("input") && !params.has("records")){
+            inputStream = env.addSource(new SourceWithTimestamp(params.get("input")));
+        }
+        else {
+            System.out.println("Use --input to specify file input  or use --records to specify records");
+        }
+
         final OutputTag<Tuple4<Integer, String, String, Map<String, Float>>> scoreMapOutput = new OutputTag<Tuple4<Integer, String, String, Map<String, Float>>>("scoreMap-output") {
         };
-
-
         if (inputStream == null) {
             System.exit(1);
             return;
         }
 
-        //**********************************hash the stream according to v.simple distributing technique********************************
-        //https://docs.google.com/presentation/d/1QIbTYqAX_zNno8xCBicMshQF3_2nW1ZTKaxVLY5dj5U/edit?usp=sharing
+        //**********************************hash the stream according to  replication and splitting mechanism********************************
+        DataStream<Tuple5<Integer, String, String, Float, Integer>> KeyedRatingStream = inputStream.flatMap(new FlatMapFunction<Tuple3<String, String, Float>, Tuple5<Integer, String, String, Float, Integer>>() {
 
-        DataStream<Tuple4<Integer,String,String,Float>> KeyedRatingStream = inputStream.flatMap(new FlatMapFunction<Tuple3<String, String, Float>, Tuple4<Integer, String, String, Float>>() {
-
-            //Assign any numbers of nodes but it should be even.
-            //n_i is the replication factor of the vectors(asynchronous)
-            Integer ni = 6;
+            Integer nodes = ni;
             Integer interactionHashNumber;
 
             @Override
-            public void flatMap(Tuple3<String, String, Float> input, Collector<Tuple4<Integer, String, String, Float>> out) throws Exception {
+            public void flatMap(Tuple3<String, String, Float> input, Collector<Tuple5<Integer, String, String, Float, Integer>> out) throws Exception {
+                int poissonNumber;
+                poissonNumber = PoissonGenerator.getPoisson(1);
+
+
                 ArrayList<Integer> usersNodes = new ArrayList<>();
                 ArrayList<Integer> itemNodes = new ArrayList<>();
 
                 //Hash user
-                //ni = userId%n + (0:n-1)n
+                //nodes = userId%n + (0:n-1)n
                 Long userID = Long.parseLong(input.f0);
-                Long userHashNumber = userID % ni;
-                for (int x = 0; x <= ni - 1; x++) {
-                    Integer k = (int) (userHashNumber + (x * ni));
+                Long userHashNumber = userID % nodes;
+                for (int x = 0; x <= nodes - 1; x++) {
+                    Integer k = (int) (userHashNumber + (x * nodes));
                     usersNodes.add(k);
-                    //out.collect(Tuple5.of(k,"user",input.f1,input.f2,poissonNumber));
                 }
-
 
                 //hash item
                 //nodes = (itemId%n)n + (0:n-1)
                 Long itemID = Long.parseLong(input.f1);
-                Long itemHashNumber = itemID % ni;
-                for (int x = 0; x <= ni - 1; x++) {
-                    Integer k = (int) ((itemHashNumber * ni) + x);
+                Long itemHashNumber = itemID % nodes;
+                for (int x = 0; x <= nodes - 1; x++) {
+                    Integer k = (int) ((itemHashNumber * nodes) + x);
                     itemNodes.add(k);
-                    //out.collect(Tuple5.of(k,"item",input.f1,input.f2,poissonNumber));
                 }
 
                 //get the common hash number and assign it
@@ -86,24 +98,24 @@ public class DISGD {
                         }
                     }
                 }
-                out.collect(Tuple4.of(interactionHashNumber, input.f0, input.f1, input.f2));
+                //304 to avoid skewness in case of nc=4
+                out.collect(Tuple5.of(interactionHashNumber*304, input.f0, input.f1, input.f2, poissonNumber));
             }
         });
 
-        //*************************************************************************************************************************
 
-
+//*************************************************************************************************************************
 
         DataStream<String> bagUpdateStream = KeyedRatingStream.keyBy(0)
                 .keyBy(0)
-                .process(new KeyedProcessFunction<Tuple, Tuple4<Integer, String, String, Float>, String>() {
+                .process(new KeyedProcessFunction<Tuple, Tuple5<Integer, String, String, Float, Integer>, String>() {
 
                     MapState<String, Double[]> itemsMatrix;
                     MapState<String, Double[]> usersMatrix;
                     MapState<String, ArrayList<String>> ratedItemsByUser;
                     ValueState<Integer> flagForInitialization;
 
-                    int latentFeatures = 10;
+                   // int latentFeatures = 10;
                     Double lambda = 0.01;
                     Double mu = 0.05;
 
@@ -111,38 +123,32 @@ public class DISGD {
                     Integer N = 10;
 
                     @Override
-                    public void processElement(Tuple4<Integer, String, String, Float> input, Context context, Collector<String> out) throws Exception {
+                    public void processElement(Tuple5<Integer, String, String, Float, Integer> input, Context context, Collector<String> out) throws Exception {
                         //Matrix factorization for each bag
                         String user = input.f1;
                         String item = input.f2;
-
+                        Integer k = input.f4;
 
                         SGD sgd = new SGD();
                         userItem userItemVectors;
 
                         Double[] itemVector;
                         Double[] userVector;
-                        Boolean knownUser = false;
 
-                        ArrayList<String> recommendedItems;
 
-                        //Map<String,Float> itemsScoresMatrixMap = new HashMap<>();
                         Map<String, Float> itemsScoresMatrixMap = new HashMap<>();
 
 
                         //************************get or initialize user vector************************
                         if (usersMatrix.contains(user)) {
                             userVector = usersMatrix.get(user);
-                            knownUser = true;
                         }
                         //user is not known before.
                         //initialize it
                         else {
-                            //initialize with static random numbers generated with respect to gaussian distribution from PoissonGenerator
-                            //mean=0 and variance=1
                             userVector = new Double[]{0.04412275, -0.03308702, 0.24307712, -0.02520921, 0.01096098,
                                     0.15824811, -0.09092324, -0.05916367, 0.01876032, -0.032987};
-                            //or it can be generated every time
+                            //or regenerate random gaussian initializations
                             //userVector = VectorOperations.initializeVector(latentFeatures);
                         }
                         //******************************************************************************
@@ -157,9 +163,11 @@ public class DISGD {
 
                             itemVector = new Double[]{0.04412275, -0.03308702, 0.24307712, -0.02520921, 0.01096098,
                                     0.15824811, -0.09092324, -0.05916367, 0.01876032, -0.032987};
+                            //or regenerate random gaussian initializations
                             //itemVector = VectorOperations.initializeVector(latentFeatures);
                         }
                         //******************************************************************************
+
                         //*******************************1-recommend top k items for the user*****************************************
                         //rate the coming user with all items
                         //output it on the side
@@ -176,11 +184,15 @@ public class DISGD {
 
                         // }
                         //*******************************3. update the model with the observed event**************************************
-
+                        k = 1;
+                        if (k > 0) {
+                            //TODO: Add the iteration loop
+                            for (Integer l = 0; l < k; l++) {
                                 userItemVectors = sgd.update_isgd2(userVector, itemVector, mu, lambda);
                                 usersMatrix.put(user, userItemVectors.userVector);
                                 itemsMatrix.put(item, userItemVectors.itemVector);
-
+                            }
+                        }
                         //****************************************************************************************************************
                     }
 
@@ -233,30 +245,26 @@ public class DISGD {
         DataStream<Tuple4<Integer, String, String, Map<String, Float>>> avgMapScoreStream = ((SingleOutputStreamOperator<String>) bagUpdateStream).getSideOutput(scoreMapOutput);
 
         DataStream<Integer> recallStream = avgMapScoreStream.keyBy(1)
-                .countWindow(1)
-                .process(new ProcessWindowFunction<Tuple4<Integer, String, String, Map<String, Float>>, Integer, Tuple, GlobalWindow>() {
+                .process(new KeyedProcessFunction<Tuple, Tuple4<Integer, String, String, Map<String, Float>>, Integer>() {
+
                     MapState<String, Void> ratedItems;
 
                     @Override
-                    public void process(Tuple tuple, Context context, Iterable<Tuple4<Integer, String, String, Map<String, Float>>> iterable, Collector<Integer> out) throws Exception {
-                        Integer counterCheckNode = 0;
+                    public void processElement(Tuple4<Integer, String, String, Map<String, Float>> input, Context context, Collector<Integer> out) throws Exception {
                         Map<String, Float> AllitemsWithScore = new HashMap<>();
-                        String currentUser = iterable.iterator().next().f1;
-                        String currentItem = iterable.iterator().next().f2;
+                        String currentItem = input.f2;
+
 
                         //************************************Avg Scores************************************************************************
-                        for (Tuple4<Integer, String, String, Map<String, Float>> userscoreMatrix : iterable) {
-                            counterCheckNode += 1;
-                            //get the sum of score(preparing for the average)
-                            for (Map.Entry<String, Float> userItemScore : userscoreMatrix.f3.entrySet()) {
-                                //test first with all items
-                                if (ratedItems.contains(userItemScore.getKey())) {
-                                    continue;
-                                } else {
-                                    AllitemsWithScore.put(userItemScore.getKey(), userItemScore.getValue());
-                                }
 
+                        for (Map.Entry<String, Float> userItemScore : input.f3.entrySet()) {
+                            //test first with all items
+                            if (ratedItems.contains(userItemScore.getKey())) {
+                                continue;
+                            } else {
+                                AllitemsWithScore.put(userItemScore.getKey(), userItemScore.getValue());
                             }
+
                         }
 
                         //************************************************************************************************************
@@ -272,7 +280,6 @@ public class DISGD {
 
                         recall = eval.recallOnline(currentItem, recommendedItems);
                         out.collect(recall);
-                        //updated rated items list( )
                         ratedItems.put(currentItem, null);
                         //************************************************************************************************************
                     }
@@ -291,12 +298,18 @@ public class DISGD {
 
                         ratedItems = getRuntimeContext().getMapState(descriptor);
                     }
-
                 });
 
+        if(params.has("output")){
+            recallStream.writeAsText(params.get("output"), FileSystem.WriteMode.OVERWRITE);
+        }
+        else {
+            System.out.println("Use --output to specify file input ");
+        }
 
-        recallStream.writeAsText("/Users/heidyhazem/Desktop/ITBSGDN/Bagging/recall22.txt", FileSystem.WriteMode.OVERWRITE);
-        env.execute("semi Bagged Incremental stochastic gradient descent");
+
+
+        env.execute("Distributed Incremental stochastic gradient descent");
 
     }
 }

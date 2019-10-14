@@ -4,18 +4,8 @@ import java.io.FileReader;
 import java.io.IOException;
 
 import org.apache.flink.api.java.tuple.Tuple3;
-import org.apache.flink.api.java.tuple.Tuple4;
 import org.apache.flink.streaming.api.functions.source.SourceFunction;
-import org.apache.flink.streaming.api.functions.source.SourceFunction.SourceContext;
 
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
-
-import org.apache.flink.api.java.tuple.Tuple3;
-import org.apache.flink.api.java.tuple.Tuple4;
-import org.apache.flink.streaming.api.functions.source.SourceFunction;
-import org.apache.flink.streaming.api.functions.source.SourceFunction.SourceContext;
 
 
 public class SourceWithTimestamp  implements SourceFunction<Tuple3<String,String,Float>>{
@@ -33,14 +23,12 @@ public class SourceWithTimestamp  implements SourceFunction<Tuple3<String,String
     public SourceWithTimestamp(String path)
     {
         filePath = path;
-
     }
 
     public SourceWithTimestamp(String path,int records)
     {
         filePath = path;
         no_records = records;
-
     }
 
 
