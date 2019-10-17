@@ -10,7 +10,7 @@ A distributed shared-nothing variant of the incremental stochastic gradient desc
 - DISGD is a scalalble version form [ISGD](https://link.springer.com/chapter/10.1007/978-3-319-08786-3_41) and Morever it accomplish the goal to run in distributed environment it outperforms the recall accuracy of ISGD with respect to the replication factor. 
 - DISGD applies splitting and repitlication mechanism that starts with choosing the ni parameter which is the replication factor of how many the item vector should be existed over nodes and based on it nc(number of nodes in the clutser) is caluclated nc=(n^2)i+w.ni where w∈N0.
 
- ![Test Image 1](DISGD.png | width=10)
+ ![Test Image 1](DISGD.png)
 
 
 
