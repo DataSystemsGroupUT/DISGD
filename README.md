@@ -1,8 +1,7 @@
 # DISGD
 A distributed shared-nothing variant of the incremental stochastic gradient descent algorithm.DISGD is built on top of [Flink](https://flink.apache.org/) based on its [Streaming API](https://ci.apache.org/projects/flink/flink-docs-stable/dev/datastream_api.html).
-# HOW TO RUN
+# HOW TO RUN #
 
-[heading-1](#heading-1 "Goto heading-1")
 
 
 
