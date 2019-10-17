@@ -6,6 +6,11 @@
 # DISGD
 A distributed shared-nothing variant of the incremental stochastic gradient descent algorithm.DISGD is built on top of [Flink](https://flink.apache.org/) based on its [Streaming API](https://ci.apache.org/projects/flink/flink-docs-stable/dev/datastream_api.html).
 
+# IDEA
+DISGD is a scalalble version form [ISGD](https://link.springer.com/chapter/10.1007/978-3-319-08786-3_41) and Morever it accomplish the goal to run in distributed environment it outperforms the recall accuracy of ISGD with respect to the replication factor. 
+
+
+
 # HOW TO RUN #
 - Import the maven project into your IDE
 - You can unpack the data (csv files) in the data folder to folder on your computer.The model accepts any dataset following format <user,item,rate,timeStamp> like [Movielens](https://grouplens.org/datasets/movielens/) or[Netflix](https://www.kaggle.com/netflix-inc/netflix-prize-data)
