@@ -11,26 +11,14 @@ public class SGD {
 
     userItem userItemVectors = new userItem();
 
-    public userItem update_isgd(Double[] input_userVector, Double[] input_itemVector, Double mu, Double lambda) {
-
-        //positive feedback only so the error is subtracted from one(implicit feedback)
-        //userItemVectors userItem = new userItemVectors();
-
-
-        Double error = 1 - (VectorOperations.dot(input_userVector, input_itemVector));
-
-        for (int k = 0; k < input_itemVector.length; k++) {
-            double userFeature = input_userVector[k];
-            double itemFeature = input_itemVector[k];
-            input_userVector[k] += mu * (error * itemFeature - lambda * userFeature);
-            input_itemVector[k] += mu * (error * input_userVector[k] - lambda * itemFeature);
-        }
-
-        userItemVectors.userVector = input_userVector;
-        userItemVectors.itemVector = input_itemVector;
-
-        return userItemVectors;
-    }
+    /**
+     * This method is used to update the vectors according to ISGD algorithm
+     * @param input_userVector This is the first parameter to update_isgd2 method. It is Double[] (the user vector)
+     * @param input_itemVector  This is the second parameter to update_isgd2 method. It is Double[] (the item vector)
+     * @param mu  This is the third parameter to update_isgd2 method. It is Double, the step size of ISGD
+     * @param lambda  This is the fourth parameter to update_isgd2 method. It is Double, the regularization parameter
+     * @return userItem This returns the updated item and user vectors.
+     */
 
     public userItem update_isgd2(Double[] input_userVector, Double[] input_itemVector, Double mu, Double lambda) {
 
@@ -56,61 +44,10 @@ public class SGD {
     }
 
 
-    public userItem update_sgd(Double[] input_userVector, Double[] input_itemVector, Double rate, Double mu, Double lambda, Integer iterations) {
-        //Explicit feedback
-        //userItemVectors userItem = new userItemVectors();
-        for (int n = 0; n < iterations; n++) {
-            Double error = rate - (VectorOperations.dot(input_userVector, input_itemVector));
-            for (int k = 0; k < input_userVector.length; k++) {
-                double userFeature = input_userVector[k];
-                double itemFeature = input_itemVector[k];
-                input_userVector[k] += mu * (error * itemFeature - lambda * userFeature);
-                input_itemVector[k] += mu * (error * userFeature - lambda * itemFeature);
-            }
-        }
 
-        userItemVectors.userVector = input_userVector;
-        userItemVectors.itemVector = input_itemVector;
 
-        return userItemVectors;
-    }
 
-    public ArrayList<String> recommend_isgd(Iterable<Map.Entry<String, Double[]>> itemsVectors, Double[] userVector, ArrayList<String> ratedItems, Integer N) {
 
-        Map<String, Double> scores = new HashMap<>();
-        ArrayList<String> recommendedItems = new ArrayList<>();
-
-        ArrayList<String> testScores = new ArrayList<>();
-
-        for (Map.Entry<String, Double[]> item : itemsVectors) {
-            //we should not recommend to the user movie he rated before
-            if (ratedItems.contains(item.getKey())) {
-                continue;
-            }
-
-            Double score = Math.abs(1 - VectorOperations.dot(userVector, item.getValue()));
-            scores.put(item.getKey(), score);
-            //testScores.add(item.getKey());
-            //testScores.add(String.valueOf(score));
-        }
-
-        //sorting scores to get the taste of the user
-        //scores.entrySet().stream().sorted(Map.Entry.comparingByValue(Comparator.reverseOrder()))
-        scores.entrySet().stream().sorted(Map.Entry.comparingByValue())
-                .limit(N)
-                .forEach(itemRate -> recommendedItems.add(itemRate.getKey()));
-
-        return recommendedItems;
-
-    }
-
-    public String recItemChecker(Integer index, ArrayList<String> recommenderItems) {
-        if (index >= recommenderItems.size()) {
-            return "Null";
-        } else {
-            return recommenderItems.get(index);
-        }
-    }
 }
 
 
