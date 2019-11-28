@@ -24,7 +24,21 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * <h1>DISGD</h1>
+ * The DISGD algorithm A distributed shared-nothing variant of the incremental stochastic gradient descent algorithm.
+ * DISGD is built on top of Flink based on its Streaming API.
+ *
+ *@author  Heidy Hazem
+ * @version 1.0
+ * @since   2019-08-31
+ */
+
 public class DISGD {
+    /**
+     * This is the main method which makes use of DISGD algorithm.
+     * @param args Unused.
+     */
     public static void main(String[] args) throws Exception {
 
 
@@ -57,6 +71,11 @@ public class DISGD {
         }
 
         //**********************************hash the stream according to  replication and splitting mechanism********************************
+        /**
+         * This flatMap used to generate a key for hash the coming rate according to replication and splitting mechanism.
+         * @returns the input stream with a generated key used to partition the coming rate.
+         */
+
         DataStream<Tuple5<Integer, String, String, Float, Integer>> KeyedRatingStream = inputStream.flatMap(new FlatMapFunction<Tuple3<String, String, Float>, Tuple5<Integer, String, String, Float, Integer>>() {
 
             Integer nodes = ni;
