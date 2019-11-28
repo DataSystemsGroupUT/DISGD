@@ -10,11 +10,12 @@ import org.apache.flink.streaming.api.functions.source.SourceFunction;
 
 public class SourceWithTimestamp  implements SourceFunction<Tuple3<String,String,Float>>{
 
-    //This to read from source of text file formatted in <(user)String,(item)String,(rate)Float>
+
 
     /**
-     *
+     *This to read from source of text file formatted in <(user)String,(item)String,(rate)Float>
      */
+    
     private static final long serialVersionUID = 1L;
     private boolean running=true;
     private String filePath;
